@@ -1,7 +1,7 @@
-# M.I.G.U.E.L
-**Modern Intelligent Guidance &amp; Education Utility Layer**
+# P.U.L.S.E.
+**Personalised Unified Learning Software Engine**
 
-MIGUEL is an offline school management app for students and teachers.
+PULSE is an offline school management app for students and teachers.
 
 ### Features
 
@@ -14,8 +14,7 @@ MIGUEL is an offline school management app for students and teachers.
 ### Run
 
 ```bash
-pip install customtkinter
-python MIGUEL.py
+python pulse.py
 ```
 
 **v1.0** — built for a  school coding competition.
