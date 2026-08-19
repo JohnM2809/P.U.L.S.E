@@ -1,452 +1,434 @@
 import json
 import os
-from datetime import date
+from datetime import date, datetime, timedelta
 
-FILE = "pulse_data.json"
+DATA_FILE = "pulse_data.json"
+
 
 class C:
-    RESET = "\033[0m"
-    BOLD = "\033[1m"
-    RED = "\033[91m"
+    HEAD = "\033[95m"
+    BLUE = "\033[94m"
     GREEN = "\033[92m"
     YELLOW = "\033[93m"
-    BLUE = "\033[94m"
-    CYAN = "\033[96m"
+    RED = "\033[91m"
+    END = "\033[0m"
+    BOLD = "\033[1m"
 
-def paint(text, color, width=0):
-    text = f"{text:<{width}}"
-    return f"{color}{text}{C.RESET}"
 
-def today():
+def badge(level):
+    if level == "HIGH":
+        return "\033[41m\033[97m HIGH \033[0m"
+    if level == "MEDIUM":
+        return "\033[43m\033[30m MEDIUM \033[0m"
+    return "\033[42m\033[30m LOW \033[0m"
+
+
+def banner():
+    print(C.HEAD + C.BOLD + "=" * 60)
+    print("   P.U.L.S.E - Performance & Unified Learning Support Engine")
+    print("=" * 60 + C.END)
+
+
+def today_str():
     return date.today().isoformat()
 
-def screen(title=None):
-    print()
-    print(paint("P.U.L.S.E", C.BOLD + C.CYAN))
-    print(paint("Performance & Unified Learning Support Engine", C.CYAN))
 
-    if title:
-        print(f"\n{paint(title, C.BOLD + C.BLUE)}")
+def load_data():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            return json.load(f)
 
-    print()
 
-def load():
-    if not os.path.exists(FILE) or os.path.getsize(FILE) == 0:
-        data = {"students": {}}
-        save(data)
-        return data
-
-    with open(FILE) as f:
-        return json.load(f)
-
-def save(data):
-    with open(FILE, "w") as f:
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
-def pick(data):
-    name = input("Student name: ").strip()
-
-    if name not in data["students"]:
-        print(paint("Student not found.", C.RED))
-        return None
-
-    return name
 
 def add_student(data):
     name = input("Student name: ").strip()
-
     if name in data["students"]:
-        print(paint("Student already exists.", C.RED))
+        print(C.RED + "Student already exists." + C.END)
         return
-
+    cls = input("Class (e.g., XI-A): ").strip()
     data["students"][name] = {
-        "class": input("Class: ").strip(),
+        "class": cls,
         "attendance": [],
         "marks": [],
-        "mistakes": []
+        "missed_work": 0
     }
+    save_data(data)
+    print(C.GREEN + f"Added {name}." + C.END)
 
-    save(data)
-    print(paint(f"Added {name}.", C.GREEN))
 
 def list_students(data):
-    screen("Students")
-
-    print(paint("Name", C.BOLD, 20) + paint("Class", C.BOLD))
+    print(f"\n{'Name':<18}{'Class':<10}")
+    print("-" * 30)
     for name, rec in data["students"].items():
-        print(f"{name:<20}{rec['class']}")
+        print(f"{name:<18}{rec['class']:<10}")
 
-def attendance_pct(rec):
-    records = rec.get("attendance", [])
 
-    if not records:
+def pick_student(data):
+    name = input("Student name: ").strip()
+    if name not in data["students"]:
+        print(C.RED + "Student not found." + C.END)
         return None
+    return name
 
-    return sum(r["present"] for r in records) / len(records) * 100
 
 def mark_attendance(data):
-    selected = input(f"Date [{today()}]: ").strip() or today()
-
+    print(f"Marking attendance for {today_str()}")
     for name, rec in data["students"].items():
-        answer = input(f"{name:<20} Present? (y/n): ").strip().lower()
-        present = answer == "y"
+        ans = input(f"  Is {name} present today? (y/n): ").strip().lower()
+        rec["attendance"].append({
+            "date": today_str(),
+            "present": ans == "y"
+        })
+    save_data(data)
+    print(C.GREEN + "Attendance saved." + C.END)
 
-        record = next(
-            (r for r in rec["attendance"] if r["date"] == selected),
-            None
-        )
 
-        if record:
-            record["present"] = present
-        else:
-            rec["attendance"].append({
-                "date": selected,
-                "present": present
-            })
+def attendance_pct(rec):
+    records = rec["attendance"]
+    if not records:
+        return None
+    present = sum(1 for r in records if r["present"])
+    return present / len(records) * 100
 
-    save(data)
-    print(paint(f"Attendance saved for {selected}.", C.GREEN))
+
+def marked_today(rec):
+    return any(r["date"] == today_str() for r in rec["attendance"])
+
 
 def attendance_history(data):
-    name = pick(data)
-
+    name = pick_student(data)
     if not name:
         return
-
     rec = data["students"][name]
-    screen(f"Attendance: {name}")
-
-    if not rec.get("attendance"):
-        print("No attendance recorded.")
-        return
-
-    print(paint("Date", C.BOLD, 15) + paint("Status", C.BOLD))
-
+    pct = attendance_pct(rec)
+    print(f"\nAttendance history for {name}:")
     for r in rec["attendance"]:
         status = "Present" if r["present"] else "Absent"
-        colour = C.GREEN if r["present"] else C.RED
-        print(f"{r['date']:<15}{paint(status, colour)}")
-
-    pct = attendance_pct(rec)
-    print(f"\nOverall: {pct:.1f}%")
-
-def add_marks(data):
-    name = pick(data)
-
-    if not name:
-        return
-
-    subject = input("Subject: ").strip()
-
-    try:
-        score = float(input("Score: "))
-        out_of = float(input("Out of: "))
-
-        if out_of <= 0 or not 0 <= score <= out_of:
-            raise ValueError
-
-    except ValueError:
-        print(paint("Invalid marks.", C.RED))
-        return
-
-    data["students"][name]["marks"].append({
-        "date": today(),
-        "subject": subject,
-        "score": score,
-        "out_of": out_of
-    })
-
-    save(data)
-
-    pct = score / out_of * 100
-    print(paint(
-        f"Recorded: {subject} {score:g}/{out_of:g} ({pct:.1f}%)",
-        C.GREEN
-    ))
-
-def log_mistake(data):
-    name = pick(data)
-
-    if not name:
-        return
-
-    subject = input("Subject: ").strip()
-    mistake = input("Mistake: ").strip()
-
-    if not mistake:
-        print(paint("Mistake cannot be empty.", C.RED))
-        return
-
-    data["students"][name].setdefault("mistakes", []).append({
-        "date": today(),
-        "subject": subject,
-        "mistake": mistake
-    })
-
-    save(data)
-    print(paint("Mistake logged.", C.YELLOW))
-
-def marks_trend(rec):
-    marks = rec.get("marks", [])
-    scores = [m["score"] / m["out_of"] * 100 for m in marks]
-
-    if len(scores) < 2:
-        return None
-
-    drop = sum(scores[:-1]) / len(scores[:-1]) - scores[-1]
-
-    if drop >= 15:
-        return "Sharp mark decline"
-    if drop >= 7:
-        return "Marks declining"
-
-    return None
-
-def academics_report(data):
-    name = pick(data)
-
-    if not name:
-        return
-
-    rec = data["students"][name]
-    screen(f"Academics: {name}")
-
-    print(paint("Marks", C.BOLD + C.BLUE))
+        print(f"  {r['date']}  {status}")
     print(
-        paint("Date", C.BOLD, 15) +
-        paint("Subject", C.BOLD, 22) +
-        paint("Score", C.BOLD, 12) +
-        paint("Percent", C.BOLD)
+        f"\nOverall: {pct:.1f}%"
+        if pct is not None
+        else "\nNo attendance recorded yet."
     )
 
-    for m in rec.get("marks", []):
-        pct = m["score"] / m["out_of"] * 100
-        score = f"{m['score']:g}/{m['out_of']:g}"
 
-        print(
-            f"{m['date']:<15}"
-            f"{m['subject']:<22}"
-            f"{score:<12}"
-            f"{pct:.1f}%"
-        )
+def add_marks(data):
+    name = pick_student(data)
+    if not name:
+        return
+    subject = input("Subject: ").strip()
+    try:
+        score = float(input("Score (0-100): ").strip())
+    except ValueError:
+        print(C.RED + "Invalid score." + C.END)
+        return
+    data["students"][name]["marks"].append({
+        "date": today_str(),
+        "subject": subject,
+        "score": score
+    })
+    save_data(data)
+    print(C.GREEN + f"Recorded {subject}: {score} for {name}." + C.END)
 
-    mistakes = rec.get("mistakes", [])
-    print(f"\nMistakes: {len(mistakes)}")
 
-    for m in mistakes:
-        print(f"  {m['date']}  {m['subject']:<18} {m['mistake']}")
+def log_missed_work(data):
+    name = pick_student(data)
+    if not name:
+        return
+    data["students"][name]["missed_work"] += 1
+    save_data(data)
+    print(
+        C.YELLOW
+        + f"Missed work logged for {name} "
+          f"(total: {data['students'][name]['missed_work']})."
+        + C.END
+    )
 
-    trend = marks_trend(rec)
 
-    if trend:
-        print(f"\nTrend: {paint(trend, C.RED)}")
+def marks_trend(rec):
+    scores = [m["score"] for m in rec["marks"]]
+    if len(scores) < 2:
+        return None, None
 
-def risk(rec):
+    last = scores[-1]
+    prev_avg = sum(scores[:-1]) / len(scores[:-1])
+    diff = prev_avg - last
+
+    if diff >= 15:
+        return "sharp_decline", "Sharp mark decline"
+    if diff >= 7:
+        return "decline", "Marks declining"
+    return "stable", None
+
+
+def academics_report(data):
+    name = pick_student(data)
+    if not name:
+        return
+    rec = data["students"][name]
+    print(f"\nMarks history for {name}:")
+    for m in rec["marks"]:
+        print(f"  {m['date']}  {m['subject']:<12} {m['score']}")
+    trend, reason = marks_trend(rec)
+    print(f"Missed work logged: {rec['missed_work']}")
+    print(f"Trend: {reason or 'Stable / not enough data'}")
+
+
+def compute_risk(rec):
     reasons = []
     score = 0
-    pct = attendance_pct(rec)
 
+    pct = attendance_pct(rec)
     if pct is not None:
         if pct < 75:
-            score += 2
             reasons.append("Low attendance")
+            score += 2
         elif pct < 85:
-            score += 1
             reasons.append("Attendance needs attention")
+            score += 1
 
-    trend = marks_trend(rec)
-
-    if trend == "Sharp mark decline":
+    trend, reason = marks_trend(rec)
+    if trend == "sharp_decline":
+        reasons.append(reason)
         score += 2
-        reasons.append(trend)
-    elif trend == "Marks declining":
+    elif trend == "decline":
+        reasons.append(reason)
         score += 1
-        reasons.append(trend)
 
-    mistakes = len(rec.get("mistakes", []))
-
-    if mistakes >= 4:
+    missed = rec.get("missed_work", 0)
+    if missed >= 2:
+        reasons.append("Repeated missed work")
         score += 2
-        reasons.append("Repeated mistakes")
-    elif mistakes >= 2:
+    elif missed == 1:
+        reasons.append("Missed work")
         score += 1
-        reasons.append("Multiple mistakes")
-    elif mistakes == 1:
-        score += 1
-        reasons.append("Mistake recorded")
 
-    level = "HIGH" if score >= 4 else "MEDIUM" if score >= 2 else "LOW"
+    if score >= 4:
+        level = "HIGH"
+    elif score >= 2:
+        level = "MEDIUM"
+    else:
+        level = "LOW"
 
     return level, score, reasons
 
-def level_color(level):
-    return {
-        "HIGH": C.RED,
-        "MEDIUM": C.YELLOW,
-        "LOW": C.GREEN
-    }[level]
 
-def early_warning(data):
-    screen("Early Warning")
+def early_warning_list(data):
+    print(f"\n{C.BOLD}Early Warning - all students{C.END}")
+    ranked = []
+    for name, rec in data["students"].items():
+        level, score, reasons = compute_risk(rec)
+        ranked.append((score, name, level, reasons))
+    ranked.sort(reverse=True)
 
-    ranked = [
-        (score, name, level, reasons)
-        for name, rec in data["students"].items()
-        for level, score, reasons in [risk(rec)]
-    ]
+    for score, name, level, reasons in ranked:
+        reason_text = " • ".join(reasons) if reasons else "No concerns"
+        print(f"  {badge(level)} {name:<15} {reason_text}")
 
+
+def early_warning_detail(data):
+    name = pick_student(data)
+    if not name:
+        return
+    rec = data["students"][name]
+    level, score, reasons = compute_risk(rec)
+    pct = attendance_pct(rec)
+
+    print(f"\n{C.BOLD}Risk profile: {name}{C.END}")
+    print(f"  Level: {badge(level)}  (score: {score})")
     print(
-        paint("Level", C.BOLD, 10) +
-        paint("Student", C.BOLD, 20) +
-        paint("Reasons", C.BOLD)
+        f"  Attendance: {pct:.1f}%"
+        if pct is not None
+        else "  Attendance: no data"
+    )
+    print(f"  Missed work: {rec.get('missed_work', 0)}")
+    print(
+        f"  Reasons: "
+        f"{', '.join(reasons) if reasons else 'None'}"
     )
 
-    for score, name, level, reasons in sorted(ranked, reverse=True):
+    if level == "HIGH":
         print(
-            paint(level, level_color(level), 10) +
-            f"{name:<20}" +
-            (", ".join(reasons) or "No concerns")
+            C.RED
+            + "  Suggested action: Schedule a parent-teacher meeting."
+            + C.END
+        )
+    elif level == "MEDIUM":
+        print(
+            C.YELLOW
+            + "  Suggested action: Monitor closely over the next 2 weeks."
+            + C.END
+        )
+    else:
+        print(
+            C.GREEN
+            + "  Suggested action: No action needed."
+            + C.END
         )
 
+
 def dashboard(data):
-    screen("Dashboard")
-
+    banner()
     students = data["students"]
-    risks = {name: risk(rec) for name, rec in students.items()}
+    total = len(students)
+    marked_count = sum(1 for r in students.values() if marked_today(r))
 
-    marked = sum(
-        any(r["date"] == today() for r in rec.get("attendance", []))
-        for rec in students.values()
+    risks = {
+        name: compute_risk(rec)
+        for name, rec in students.items()
+    }
+    high_count = sum(
+        1 for level, _, _ in risks.values()
+        if level == "HIGH"
+    )
+    watchlist_count = sum(
+        1 for level, _, _ in risks.values()
+        if level == "MEDIUM"
     )
 
-    high = sum(r[0] == "HIGH" for r in risks.values())
-    medium = sum(r[0] == "MEDIUM" for r in risks.values())
+    print(f"\n{C.BOLD}Dashboard{C.END}")
+    print("One view for attendance, academics and student wellbeing.\n")
 
-    print(f"{'Students':<20}{len(students)}")
-    print(f"{'Marked today':<20}{marked}")
-    print(f"{'High risk':<20}{paint(high, C.RED)}")
-    print(f"{'Watchlist':<20}{paint(medium, C.YELLOW)}")
+    print(f"  {'Students':<12} {C.BLUE}{total}{C.END}")
+    print(f"  {'Marked Today':<12} {C.GREEN}{marked_count}{C.END}")
+    print(f"  {'High Risk':<12} {C.RED}{high_count}{C.END}")
+    print(f"  {'Watchlist':<12} {C.YELLOW}{watchlist_count}{C.END}")
 
-    print(f"\n{paint('Needs attention', C.BOLD + C.BLUE)}\n")
+    print(f"\n{C.BOLD}Students needing attention{C.END}")
+    ranked = sorted(
+        (
+            (score, name, level, reasons)
+            for name, (level, score, reasons) in risks.items()
+        ),
+        reverse=True,
+    )
 
-    found = False
-
-    for name, (level, score, reasons) in sorted(
-        risks.items(),
-        key=lambda x: x[1][1],
-        reverse=True
-    ):
-        if reasons:
-            found = True
+    shown = False
+    for score, name, level, reasons in ranked:
+        if level in ("HIGH", "MEDIUM"):
+            shown = True
+            reason_text = " • ".join(reasons)
             print(
-                paint(level, level_color(level), 10) +
-                f"{name:<20}" +
-                ", ".join(reasons)
+                f"  {badge(level)} {name:<15} {reason_text}"
             )
 
-    if not found:
-        print(paint("No concerns.", C.GREEN))
+    if not shown:
+        print(
+            C.GREEN
+            + "  No students currently flagged."
+            + C.END
+        )
+    print()
 
-MENUS = {
-    "main": (
-        "1. Dashboard\n"
-        "2. Students\n"
-        "3. Attendance\n"
-        "4. Academics\n"
-        "5. Early Warning\n"
-        "0. Exit"
-    ),
-    "students": (
-        "1. Add student\n"
-        "2. List students\n"
-        "0. Back"
-    ),
-    "attendance": (
-        "1. Mark attendance\n"
-        "2. View history\n"
-        "0. Back"
-    ),
-    "academics": (
-        "1. Record test\n"
-        "2. Log mistake\n"
-        "3. View report\n"
-        "0. Back"
-    ),
-    "warning": (
-        "1. View risk list\n"
-        "0. Back"
-    )
-}
 
-def submenu(data, menu, actions, title):
+MAIN_MENU = """
+--- P.U.L.S.E Main Menu ---
+1. Dashboard
+2. Students
+3. Attendance
+4. Academics
+5. Early Warning
+0. Exit
+"""
+
+STUDENTS_MENU = """
+-- Students --
+1. Add student
+2. List students
+0. Back
+"""
+
+ATTENDANCE_MENU = """
+-- Attendance --
+1. Mark attendance for today
+2. View a student's attendance history
+0. Back
+"""
+
+ACADEMICS_MENU = """
+-- Academics --
+1. Record a test score
+2. Log missed work
+3. View a student's academics report
+0. Back
+"""
+
+EARLY_WARNING_MENU = """
+-- Early Warning --
+1. View full risk list
+2. View a student's risk detail
+0. Back
+"""
+
+
+def submenu(title, data, handlers):
     while True:
-        screen(title)
-        print(menu)
-
-        choice = input("\nChoose: ").strip()
-
+        print(title)
+        choice = input("Choose an option: ").strip()
         if choice == "0":
             return
-
-        if choice in actions:
-            actions[choice](data)
+        action = handlers.get(choice)
+        if action:
+            action(data)
         else:
-            print(paint("Invalid option.", C.RED))
-            
+            print(C.RED + "Invalid option." + C.END)
+
+
 def main():
-    data = load()
-
+    data = load_data()
+    banner()
     while True:
-        screen()
-        print(MENUS["main"])
-
-        choice = input("\nChoose: ").strip()
+        print(MAIN_MENU)
+        choice = input("Choose an option: ").strip()
 
         if choice == "1":
             dashboard(data)
-
         elif choice == "2":
             submenu(
+                STUDENTS_MENU,
                 data,
-                MENUS["students"],
-                {"1": add_student, "2": list_students},
-                "Students"
+                {"1": add_student, "2": list_students}
             )
-
         elif choice == "3":
             submenu(
+                ATTENDANCE_MENU,
                 data,
-                MENUS["attendance"],
-                {"1": mark_attendance, "2": attendance_history},
-                "Attendance"
+                {"1": mark_attendance, "2": attendance_history}
             )
-
         elif choice == "4":
             submenu(
+                ACADEMICS_MENU,
                 data,
-                MENUS["academics"],
                 {
                     "1": add_marks,
-                    "2": log_mistake,
+                    "2": log_missed_work,
                     "3": academics_report
-                },
-                "Academics"
+                }
             )
-
         elif choice == "5":
             submenu(
+                EARLY_WARNING_MENU,
                 data,
-                MENUS["warning"],
-                {"1": early_warning},
-                "Early Warning"
+                {
+                    "1": early_warning_list,
+                    "2": early_warning_detail
+                }
             )
-
         elif choice == "0":
-            print(paint(f"\nData saved to {FILE}. Goodbye!", C.BLUE))
+            print(
+                C.BLUE
+                + "Goodbye! Data saved to "
+                + DATA_FILE
+                + C.END
+            )
             break
-
         else:
-            print(paint("Invalid option.", C.RED))
+            print(C.RED + "Invalid option, try again." + C.END)
+
 
 if __name__ == "__main__":
     main()
