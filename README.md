@@ -116,8 +116,7 @@ The system also records the specific factors contributing to the score, making t
 
 ## Data Storage
 
-For data storage, I used a json file record. It proved to be more efficient, as everything is stored locally, without the need of the internet.
----
+For data storage, I used a JSON file. It proved to be more efficient, as everything is stored locally, without the need of the internet.
 
 ## Technology
 
