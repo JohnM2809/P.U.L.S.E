@@ -132,6 +132,11 @@ I intentionally chose not to use external modules to ensure it would work for ev
 
 ## Getting Started
 
+### 1. Download pulse.exe from Releases
+### 2. Run!
+
+If you want to run P.U.L.S.E on Python, follow below steps:
+
 ### 1. Clone the repository
 
 ```bash
