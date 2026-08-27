@@ -183,4 +183,4 @@ Built with Python for an interschool competition.
 
 ## License
 
-This project is available for educational and personal use. Add a license to this repository if you plan to distribute or modify it publicly.
+MIT LICENSE
