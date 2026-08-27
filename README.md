@@ -17,4 +17,4 @@ PULSE is an offline school management app for students and teachers.
 python pulse.py
 ```
 
-**v1.0** — built for a  school coding competition.
+**v1.0** — built for a  school coding competition, and secured 1st!
